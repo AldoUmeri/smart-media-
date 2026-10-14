@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import {
-  Activity, ArrowDownRight, ArrowLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronDown,
+  Activity, ArrowDownRight, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clapperboard, Clock3, CloudUpload, Film, FolderKanban, Gauge, LogOut,
   Mail, Menu, MessageSquare, Plus, Search, Settings, ShieldCheck, Sparkles, Users, Video,
   X, Play, LockKeyhole, LoaderCircle, ExternalLink, RefreshCw
@@ -37,10 +37,10 @@ function Status({ value }: { value: string }) {
 function Brand({ small = false }: { small?: boolean }) {
   return <span className="brand-mark"><span className="brand-icon"><Clapperboard size={small ? 17 : 20} /></span>{!small && <span>smart<span className="brand-light">media</span><i>.</i></span>}</span>;
 }
-function Button({ children, onClick, type = "button", variant = "primary", disabled = false }: { children: React.ReactNode; onClick?: () => void; type?: "button" | "submit"; variant?: "primary" | "secondary" | "ghost" | "danger"; disabled?: boolean }) {
+function Button({ children, onClick, type = "button", variant = "primary", disabled = false }: { children: ReactNode; onClick?: () => void; type?: "button" | "submit"; variant?: "primary" | "secondary" | "ghost" | "danger"; disabled?: boolean }) {
   return <button className={`button button-${variant}`} type={type} onClick={onClick} disabled={disabled}>{children}</button>;
 }
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return <label className="field"><span>{label}</span>{children}{hint && <small>{hint}</small>}</label>;
 }
 function App() {
@@ -100,8 +100,8 @@ function App() {
       <Route path="/restablecer-contrasena" element={<AuthPage mode="reset" onNotice={setNotice} />} />
       <Route path="/privacidad" element={<LegalPage type="privacy" />} />
       <Route path="/terminos" element={<LegalPage type="terms" />} />
-      <Route path="/app/*" element={session && profile ? <Workspace profile={profile} session={session} onSignOut={signOut} onProfile={setProfile} /> : <Navigate to="/login" replace state={{ from: location.pathname }} />} />
-      <Route path="/admin/*" element={session && profile?.role === "admin" ? <Workspace profile={profile} session={session} onSignOut={signOut} onProfile={setProfile} /> : session ? <Navigate to="/app" replace /> : <Navigate to="/login" replace />} />
+      <Route path="/app/*" element={!session ? <Navigate to="/login" replace state={{ from: location.pathname }} /> : !profile ? <div className="full-loader"><LoaderCircle className="spin" size={26}/><span>Cargando perfil…</span></div> : profile.role === "admin" ? <Navigate to="/admin" replace /> : <Workspace profile={profile} session={session} onSignOut={signOut} onProfile={setProfile} />} />
+      <Route path="/admin/*" element={!session ? <Navigate to="/login" replace /> : !profile ? <div className="full-loader"><LoaderCircle className="spin" size={26}/><span>Cargando perfil…</span></div> : profile.role === "admin" ? <Workspace profile={profile} session={session} onSignOut={signOut} onProfile={setProfile} /> : <Navigate to="/app" replace />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </>;
@@ -136,7 +136,7 @@ function Landing() {
     <footer className="public-footer wrap"><Brand/><span>© {new Date().getFullYear()} Mi Marca. Revisión audiovisual privada.</span><div><Link to="/privacidad">Privacidad</Link><Link to="/terminos">Términos</Link></div></footer>
   </main>;
 }
-function Feature({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+function Feature({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return <article className="feature-card"><div className="feature-icon">{icon}</div><h3>{title}</h3><p>{text}</p></article>;
 }
 
@@ -202,6 +202,7 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   const [projects, setProjects] = useState<Project[]>([]); const [videos, setVideos] = useState<VideoItem[]>([]); const [comments, setComments] = useState<CommentItem[]>([]);
   const [clients, setClients] = useState<Profile[]>([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState(""); const [selectedProject, setSelectedProject] = useState("");
+  const [activeVideoId, setActiveVideoId] = useState("");
   const [newName, setNewName] = useState(""); const [newDescription, setNewDescription] = useState(""); const [newClient, setNewClient] = useState("");
   const [uploadProject, setUploadProject] = useState(""); const [uploadTitle, setUploadTitle] = useState(""); const [uploadDescription, setUploadDescription] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0); const [uploading, setUploading] = useState(false);
@@ -248,7 +249,7 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   }), [projects, search, tab, videos]);
   const project = projects.find(p => p.id === activeProjectId);
   const projectVideos = videos.filter(v => v.project_id === (activeProjectId || selectedProject));
-  const selectedVideo = projectVideos[0];
+  const selectedVideo = projectVideos.find(v => v.id === activeVideoId) ?? projectVideos[0];
   const projectComments = comments.filter(c => c.project_id === (activeProjectId || selectedProject));
 
   async function createProject(e: FormEvent) {
@@ -303,7 +304,7 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
     setLocalError(""); setVideoUrl("");
     const { data, error: urlError } = await supabase.storage.from("private-videos").createSignedUrl(video.storage_path, 300);
     if (urlError) { setLocalError(urlError.message); return; }
-    setVideoUrl(data.signedUrl); setSelectedProject(video.project_id);
+    setVideoUrl(data.signedUrl); setSelectedProject(video.project_id); setActiveVideoId(video.id);
     navigate(`${base}/proyectos/${video.project_id}`);
   }
   async function postComment(e: FormEvent) {
@@ -377,7 +378,7 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   </div>;
 }
 
-function PageHeading({ eyebrow, title, subtitle, action }: { eyebrow: string; title: string; subtitle: string; action?: React.ReactNode }) {
+function PageHeading({ eyebrow, title, subtitle, action }: { eyebrow: string; title: string; subtitle: string; action?: ReactNode }) {
   return <div className="page-heading"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{subtitle}</p></div>{action && <div className="heading-action">{action}</div>}</div>;
 }
 function Dashboard({ isAdmin, profile, projects, videos, comments, onOpen, onCreate }: { isAdmin: boolean; profile: Profile; projects: Project[]; videos: VideoItem[]; comments: CommentItem[]; onOpen: (p: Project)=>void; onCreate: ()=>void }) {
@@ -392,7 +393,7 @@ function Dashboard({ isAdmin, profile, projects, videos, comments, onOpen, onCre
     {comments.length ? <div className="surface activity-list">{comments.slice(0,5).map(c=><div className="activity-item" key={c.id}><div className="activity-avatar">{(c.profiles?.full_name||"U").charAt(0).toUpperCase()}</div><div className="activity-body"><b>{c.profiles?.full_name || "Usuario"} <span>comentó</span></b><p>{c.body}</p><small>{formatDate(c.created_at)}{c.timestamp_seconds!==null? ` · ${formatTime(c.timestamp_seconds)}`:""}</small></div><MessageSquare size={16}/></div>)}</div> : <div className="surface small-empty"><MessageSquare size={19}/><span>Aún no hay comentarios. Las conversaciones aparecerán aquí.</span></div>}
   </>;
 }
-function Stat({ icon, label, value, note }: { icon: React.ReactNode; label: string; value: number; note: string }) {
+function Stat({ icon, label, value, note }: { icon: ReactNode; label: string; value: number; note: string }) {
   return <div className="surface stat-card"><div className="stat-top"><span className="stat-icon">{icon}</span><ArrowDownRight size={15} className="muted-icon"/></div><span className="stat-label">{label}</span><strong>{value.toLocaleString("es-MX")}</strong><small>{note}</small></div>;
 }
 function ProjectCard({ project, videos, comments, onOpen }: { project: Project; videos: VideoItem[]; comments: number; onOpen: ()=>void }) {
@@ -423,7 +424,7 @@ function ProjectRoom({ project, videos, comments, isAdmin, profile, videoUrl, on
   useEffect(()=>{if(latest&&!version)setVersion(latest.id)},[latest,version]);
   const rootComments=comments.filter(c=>!c.parent_comment_id);
   return <><button className="back-link room-back" onClick={onBack}><ArrowLeft size={15}/> Volver a proyectos</button><PageHeading eyebrow="SALA DE REVISIÓN" title={project.name} subtitle={project.description||"Revisa la entrega y comparte tus comentarios."} action={<Status value={active?.review_status||project.status}/>}/>
-    <div className="review-layout"><section className="review-main"><div className="video-player surface">{active && videoUrl && active.id===version ? <video ref={setVideoElement} src={videoUrl} controls playsInline onTimeUpdate={e=>setVideoTime(Math.floor(e.currentTarget.currentTime))} onError={()=>{}}/> : <div className="video-placeholder"><div className="video-placeholder-art"><div className="art-bars"><i/><i/><i/><i/><i/></div></div><div className="video-placeholder-overlay"><span className="play-large"><Play size={22} fill="currentColor"/></span><b>{active?.title||"Aún no hay una entrega"}</b><small>{active? `Versión ${active.version_number} · ${formatBytes(active.size_bytes)}`:"El equipo todavía no ha subido videos."}</small>{active&&<Button onClick={()=>onOpenVideo(active)}><Play size={15}/> Cargar reproductor privado</Button>}</div></div>}
+    <div className="review-layout"><section className="review-main"><div className="video-player surface">{active && videoUrl && active.id===version ? <video ref={setVideoElement} src={videoUrl} controls playsInline onError={()=>{setVideoUrl("");setLocalError("No se pudo reproducir este archivo. Comprueba el formato del video y vuelve a cargarlo.");}}/> : <div className="video-placeholder"><div className="video-placeholder-art"><div className="art-bars"><i/><i/><i/><i/><i/></div></div><div className="video-placeholder-overlay"><span className="play-large"><Play size={22} fill="currentColor"/></span><b>{active?.title||"Aún no hay una entrega"}</b><small>{active? `Versión ${active.version_number} · ${formatBytes(active.size_bytes)}`:"El equipo todavía no ha subido videos."}</small>{active&&<Button onClick={()=>onOpenVideo(active)}><Play size={15}/> Cargar reproductor privado</Button>}</div></div>}
         <div className="player-caption"><div><b>{active?.title||project.name}</b><small>{active? `V${active.version_number} · Subido ${formatDate(active.created_at)}`:"Sin videos asociados"}</small></div>{active&&<Status value={active.review_status}/>}</div>
       </div>
       {active && <div className="surface review-actions"><div><b>Estado de revisión</b><p>{active.review_status==="approved"?"Esta versión ha sido aprobada.":active.review_status==="changes_requested"?"Se solicitaron cambios en esta versión.":"Esta versión está disponible para revisión."}</p></div><div className="review-action-buttons">{isAdmin ? <Button variant="secondary" onClick={()=>onStatus(active,"in_review")}>Enviar a revisión</Button> : <Button variant="secondary" onClick={()=>onStatus(active,"changes_requested")} disabled={active.review_status==="approved"}><MessageSquare size={15}/> Solicitar cambios</Button>}{!isAdmin&&<Button onClick={()=>{if(window.confirm("¿Confirmas que apruebas esta versión del video?"))onStatus(active,"approved")}} disabled={active.review_status==="approved"}><CheckCircle2 size={15}/> Aprobar entrega</Button>}</div></div>}
@@ -434,7 +435,7 @@ function ProjectRoom({ project, videos, comments, isAdmin, profile, videoUrl, on
     </aside></div>
   </>;
 }
-function EmptyState({ icon, title, text, action }: { icon:React.ReactNode; title:string; text:string; action?:React.ReactNode }) {
+function EmptyState({ icon, title, text, action }: { icon:ReactNode; title:string; text:string; action?:ReactNode }) {
   return <div className="surface empty-state"><span className="empty-icon">{icon}</span><h3>{title}</h3><p>{text}</p>{action}</div>;
 }
 function LegalPage({ type }: { type:"privacy"|"terms" }) {
