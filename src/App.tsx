@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
+import { Upload } from "tus-js-client";
 import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown,
   CircleHelp, Clapperboard, Clock3, CloudUpload, Film, FolderKanban, Gauge, LogOut,
@@ -275,19 +276,38 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   async function uploadVideo(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); setLocalError(""); setLocalMessage("");
     if (!supabase || !uploadProject) return;
-    const form = e.currentTarget; const input = form.elements.namedItem("video-file") as HTMLInputElement;
+    const form = e.currentTarget;
+    const input = form.elements.namedItem("video-file") as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) { setLocalError("Selecciona un archivo de video."); return; }
     const allowed = ["video/mp4", "video/webm", "video/quicktime"];
     if (!allowed.includes(file.type)) { setLocalError("Formato no permitido. Usa MP4, WebM o MOV si el bucket está configurado para aceptarlo."); return; }
     const maxBytes = 500 * 1024 * 1024;
-    if (file.size > maxBytes) { setLocalError("El tamaño máximo configurado en la interfaz es de 500 MB. Ajusta también el límite del bucket en Supabase."); return; }
-    setUploading(true); setUploadProgress(5);
+    if (file.size > maxBytes) { setLocalError("El tamaño máximo configurado es de 500 MB. Ajusta también el límite del bucket en Supabase."); return; }
+    setUploading(true); setUploadProgress(0);
+    let path = "";
     try {
-      const path = `${uploadProject}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const { error: storageError } = await supabase.storage.from("private-videos").upload(path, file, { contentType: file.type, upsert: false });
-      if (storageError) throw storageError;
-      setUploadProgress(85);
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      if (authError || !authData.session) throw authError ?? new Error("Tu sesión expiró. Inicia sesión nuevamente.");
+      const apiKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+      if (!apiKey || !supabaseUrl) throw new Error("Falta configurar Supabase en las variables de entorno.");
+      path = uploadProject + "/" + crypto.randomUUID() + "-" + file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const endpoint = supabaseUrl.replace(/\/$/, "") + "/storage/v1/upload/resumable";
+      await new Promise<void>((resolve, reject) => {
+        const upload = new Upload(file, {
+          endpoint,
+          retryDelays: [0, 1000, 3000, 5000],
+          headers: { authorization: "Bearer " + authData.session!.access_token, apikey: apiKey },
+          metadata: { bucketName: "private-videos", objectName: path, contentType: file.type, cacheControl: "3600" },
+          chunkSize: 6 * 1024 * 1024,
+          onError: reject,
+          onProgress: (uploaded, total) => setUploadProgress(total ? Math.min(99, Math.round(uploaded / total * 100)) : 0),
+          onSuccess: resolve,
+        });
+        upload.start();
+      });
+      setUploadProgress(99);
       const nextVersion = Math.max(0, ...videos.filter(v => v.project_id === uploadProject).map(v => v.version_number)) + 1;
       const { error: metadataError } = await supabase.from("videos").insert({
         project_id: uploadProject, storage_path: path, title: uploadTitle.trim() || file.name,
@@ -296,8 +316,10 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
       });
       if (metadataError) { await supabase.storage.from("private-videos").remove([path]); throw metadataError; }
       setUploadProgress(100); setLocalMessage("Video cargado y registrado."); setUploadTitle(""); setUploadDescription(""); form.reset(); await loadData();
-    } catch (e) { setLocalError(e instanceof Error ? e.message : "No se pudo subir el video."); }
-    finally { setUploading(false); window.setTimeout(() => setUploadProgress(0), 1200); }
+    } catch (e) {
+      setLocalError(e instanceof Error ? e.message : "No se pudo subir el video.");
+      if (path && supabase) await supabase.storage.from("private-videos").remove([path]);
+    } finally { setUploading(false); window.setTimeout(() => setUploadProgress(0), 1200); }
   }
   async function openVideo(video: VideoItem) {
     if (!supabase) return;
