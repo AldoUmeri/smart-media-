@@ -82,3 +82,15 @@ for each row execute procedure public.notify_new_comment();
 drop trigger if exists video_status_notification on public.videos;
 create trigger video_status_notification after update of review_status on public.videos
 for each row execute procedure public.notify_video_status();
+
+-- Keep the profile email in sync with Supabase Auth without making it client-editable.
+create or replace function public.handle_user_email_change()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  update public.profiles set email = coalesce(new.email,'') where id = new.id;
+  return new;
+end; $$;
+drop trigger if exists on_auth_user_email_changed on auth.users;
+create trigger on_auth_user_email_changed after update of email on auth.users
+for each row when (old.email is distinct from new.email)
+execute procedure public.handle_user_email_change();
