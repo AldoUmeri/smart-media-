@@ -173,6 +173,7 @@ create policy "private videos admin delete" on storage.objects for delete to aut
 
 grant select on public.profiles,public.projects,public.project_members,public.videos,public.comments,public.approvals,public.notifications,public.audit_log to authenticated;
 grant insert,update,delete on public.projects,public.project_members,public.comments,public.approvals,public.notifications to authenticated;
+grant insert on public.videos to authenticated;
 -- Clients may change review status only; they cannot rewrite a file path or version metadata.
 revoke update on public.videos from authenticated;
 grant update (review_status) on public.videos to authenticated;
