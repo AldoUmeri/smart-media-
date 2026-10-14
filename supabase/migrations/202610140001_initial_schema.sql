@@ -6,7 +6,7 @@ begin new.updated_at = now(); return new; end; $$;
 
 create table if not exists public.profiles (
  id uuid primary key references auth.users(id) on delete cascade,
- full_name text not null default '', phone text,
+ full_name text not null default '', email text not null default '', phone text,
  role text not null default 'client' check (role in ('admin','client')),
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
@@ -14,8 +14,8 @@ create table if not exists public.profiles (
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
- insert into public.profiles(id,full_name,phone,role)
- values(new.id,coalesce(new.raw_user_meta_data->>'full_name',''),nullif(new.raw_user_meta_data->>'phone',''),'client')
+ insert into public.profiles(id,full_name,email,phone,role)
+ values(new.id,coalesce(new.raw_user_meta_data->>'full_name',''),coalesce(new.email,''),nullif(new.raw_user_meta_data->>'phone',''),'client')
  on conflict(id) do nothing;
  return new;
 end; $$;
