@@ -134,7 +134,7 @@ create policy "videos admin delete" on public.videos for delete to authenticated
 create policy "comments read authorized" on public.comments for select to authenticated using((select public.is_admin()) or (select public.is_project_member(project_id)));
 create policy "comments insert authorized" on public.comments for insert to authenticated with check(
  user_id=(select auth.uid()) and ((select public.is_admin()) or (select public.is_project_member(project_id))) and
- (parent_comment_id is null or exists(select 1 from public.comments parent where parent.id=parent_comment_id and parent.project_id=project_id))
+ (parent_comment_id is null or exists(select 1 from public.comments parent where parent.id=comments.parent_comment_id and parent.project_id=comments.project_id))
 );
 create policy "comments update own or admin" on public.comments for update to authenticated using(user_id=(select auth.uid()) or (select public.is_admin())) with check(user_id=(select auth.uid()) or (select public.is_admin()));
 create policy "comments admin delete" on public.comments for delete to authenticated using((select public.is_admin()));
@@ -142,7 +142,7 @@ create policy "comments admin delete" on public.comments for delete to authentic
 create policy "approvals read authorized" on public.approvals for select to authenticated using((select public.is_admin()) or (select public.is_project_member(project_id)));
 create policy "approvals insert authorized" on public.approvals for insert to authenticated with check(
  approved_by=(select auth.uid()) and ((select public.is_admin()) or (select public.is_project_member(project_id))) and
- exists(select 1 from public.videos v where v.id=video_id and v.project_id=project_id and v.version_number=approvals.version_number and v.review_status='approved')
+ exists(select 1 from public.videos v where v.id=approvals.video_id and v.project_id=approvals.project_id and v.version_number=approvals.version_number and v.review_status='approved')
 );
 create policy "approvals admin delete" on public.approvals for delete to authenticated using((select public.is_admin()));
 
@@ -172,4 +172,8 @@ create policy "private videos admin update" on storage.objects for update to aut
 create policy "private videos admin delete" on storage.objects for delete to authenticated using(bucket_id='private-videos' and (select public.is_admin()));
 
 grant select on public.profiles,public.projects,public.project_members,public.videos,public.comments,public.approvals,public.notifications,public.audit_log to authenticated;
-grant insert,update,delete on public.projects,public.project_members,public.videos,public.comments,public.approvals,public.notifications to authenticated;
+grant insert,update,delete on public.projects,public.project_members,public.comments,public.approvals,public.notifications to authenticated;
+-- Clients may change review status only; they cannot rewrite a file path or version metadata.
+revoke update on public.videos from authenticated;
+grant update (review_status) on public.videos to authenticated;
+grant delete on public.videos to authenticated;
