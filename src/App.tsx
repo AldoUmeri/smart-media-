@@ -348,15 +348,16 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   async function updateStatus(video: VideoItem, status: string) {
     if (!supabase) return;
     setLocalError("");
+    if (status === "approved") {
+      const { error: approvalError } = await supabase.rpc("approve_video", { target_video: video.id });
+      if (approvalError) { setLocalError(approvalError.message); return; }
+      setLocalMessage("Entrega aprobada y registrada en el historial.");
+      await loadData();
+      return;
+    }
     const { error: updateError } = await supabase.from("videos").update({ review_status: status }).eq("id", video.id);
     if (updateError) setLocalError(updateError.message);
-    else {
-      if (status === "approved") {
-        const { error: approvalError } = await supabase.from("approvals").insert({ project_id: video.project_id, video_id: video.id, approved_by: session.user.id, version_number: video.version_number });
-        if (approvalError) { setLocalError(approvalError.message); return; }
-      }
-      setLocalMessage(`Estado actualizado: ${statusLabel(status)}.`); await loadData();
-    }
+    else { setLocalMessage("Estado actualizado: " + statusLabel(status) + "."); await loadData(); }
   }
   async function saveProfile(e: FormEvent) {
     e.preventDefault(); if (!supabase) return; setSaveBusy(true); setLocalError(""); setLocalMessage("");
