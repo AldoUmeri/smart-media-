@@ -211,7 +211,7 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   const [tab, setTab] = useState<"all"|"in_review"|"changes_requested"|"approved">("all");
   const [profileName, setProfileName] = useState(profile.full_name); const [profilePhone, setProfilePhone] = useState(profile.phone ?? "");
   const [saveBusy, setSaveBusy] = useState(false); const [localMessage, setLocalMessage] = useState(""); const [localError, setLocalError] = useState("");
-  const activeProjectId = location.pathname.match(/\\/proyectos\\/([^/]+)/)?.[1];
+  const activeProjectId = location.pathname.match(/\/proyectos\/([^/]+)/)?.[1];
 
   const loadData = useCallback(async () => {
     if (!supabase) return;
