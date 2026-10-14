@@ -18,7 +18,7 @@ Este repositorio contiene el punto de partida funcional de la aplicación. La au
 ## Desarrollo local
 1. Instala dependencias: `npm install`
 2. Copia `.env.example` a `.env` y añade la URL y la clave pública (anon/publishable) de Supabase.
-3. Ejecuta en Supabase SQL Editor, en orden, `supabase/migrations/202610140001_initial_schema.sql` y `supabase/migrations/202610140002_notifications.sql` y `supabase/migrations/202610140003_atomic_approvals.sql`.
+3. Ejecuta en Supabase SQL Editor, en este orden: `supabase/migrations/202610140001_initial_schema.sql`, `supabase/migrations/202610140002_notifications.sql` y `supabase/migrations/202610140003_atomic_approvals.sql`.
 4. Ejecuta `npm run dev`. Para verificar tipos y compilar, usa `npm run build`.
 
 ## Configurar el primer administrador
