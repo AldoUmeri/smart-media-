@@ -56,7 +56,7 @@ function App() {
 
   const loadProfile = useCallback(async (userId: string) => {
     if (!supabase) return;
-    const { data } = await supabase.from("profiles").select("id,full_name,phone,role").eq("id", userId).maybeSingle();
+    const { data } = await supabase.from("profiles").select("id,full_name,email,phone,role").eq("id", userId).maybeSingle();
     if (data) setProfile(data as Profile);
   }, []);
 
@@ -234,7 +234,7 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
       if (n.error) throw n.error;
       setProjects((p.data ?? []) as Project[]); setVideos((v.data ?? []) as VideoItem[]); setComments((c.data ?? []) as CommentItem[]); setNotifications((n.data ?? []) as NotificationItem[]);
       if (isAdmin) {
-        const { data: clientData, error: clientError } = await supabase.from("profiles").select("id,full_name,phone,role").eq("role","client").order("full_name");
+        const { data: clientData, error: clientError } = await supabase.from("profiles").select("id,full_name,email,phone,role").eq("role","client").order("full_name");
         if (clientError) throw clientError;
         setClients((clientData ?? []) as Profile[]);
       }
@@ -440,7 +440,7 @@ function VideosPage({ isAdmin, videos, projects, onOpen, onUpload }: { isAdmin:b
 }
 function ClientsPage({ clients, projects, onAssign }: { clients:Profile[]; projects:Project[]; onAssign:(p:string,u:string)=>void }) {
   const [selected,setSelected]=useState<Record<string,string>>({});
-  return <><PageHeading eyebrow="GESTIÓN DE ACCESOS" title="Clientes" subtitle="Asigna proyectos a cuentas registradas y verificadas."/><div className="surface table-wrap"><table><thead><tr><th>Cliente</th><th>Teléfono</th><th>Proyectos</th><th>Asignar proyecto</th></tr></thead><tbody>{clients.map(c=><tr key={c.id}><td><div className="table-video"><span className="user-avatar">{(c.full_name||"U").charAt(0).toUpperCase()}</span><div><b>{c.full_name||"Sin nombre"}</b><small>{c.id.slice(0,8)}…</small></div></div></td><td>{c.phone||"—"}</td><td>{projects.length} disponibles</td><td><div className="assign-control"><select value={selected[c.id]||""} onChange={e=>setSelected(s=>({...s,[c.id]:e.target.value}))}><option value="">Seleccionar proyecto</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="icon-button" disabled={!selected[c.id]} onClick={()=>onAssign(selected[c.id],c.id)} aria-label="Asignar proyecto"><Plus size={16}/></button></div></td></tr>)}</tbody></table>{clients.length===0&&<div className="table-empty">Aún no hay cuentas de cliente registradas.</div>}</div><p className="fine-print">El correo de acceso no se consulta desde perfiles. La gestión de credenciales permanece en Supabase Auth.</p></>;
+  return <><PageHeading eyebrow="GESTIÓN DE ACCESOS" title="Clientes" subtitle="Asigna proyectos a cuentas registradas y verificadas."/><div className="surface table-wrap"><table><thead><tr><th>Cliente</th><th>Correo electrónico</th><th>Teléfono</th><th>Proyectos</th><th>Asignar proyecto</th></tr></thead><tbody>{clients.map(c=><tr key={c.id}><td><div className="table-video"><span className="user-avatar">{(c.full_name||"U").charAt(0).toUpperCase()}</span><div><b>{c.full_name||"Sin nombre"}</b><small>{c.id.slice(0,8)}…</small></div></div></td><td>{c.email||"—"}</td><td>{c.phone||"—"}</td><td>{projects.length} disponibles</td><td><div className="assign-control"><select value={selected[c.id]||""} onChange={e=>setSelected(s=>({...s,[c.id]:e.target.value}))}><option value="">Seleccionar proyecto</option>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select><button className="icon-button" disabled={!selected[c.id]} onClick={()=>onAssign(selected[c.id],c.id)} aria-label="Asignar proyecto"><Plus size={16}/></button></div></td></tr>)}</tbody></table>{clients.length===0&&<div className="table-empty">Aún no hay cuentas de cliente registradas.</div>}</div><p className="fine-print">El correo de acceso no se consulta desde perfiles. La gestión de credenciales permanece en Supabase Auth.</p></>;
 }
 function CommentsPage({ comments, projects, videos, onOpenProject }: { comments:CommentItem[]; projects:Project[]; videos:VideoItem[]; onOpenProject:(id:string)=>void }) {
   return <><PageHeading eyebrow="CONVERSACIONES" title="Comentarios" subtitle="Feedback registrado en los proyectos a los que tienes acceso."/><div className="surface activity-list">{comments.map(c=><div className="activity-item comment-page-item" key={c.id}><div className="activity-avatar">{(c.profiles?.full_name||"U").charAt(0).toUpperCase()}</div><div className="activity-body"><b>{c.profiles?.full_name||"Usuario"} <span>· {projects.find(p=>p.id===c.project_id)?.name||"Proyecto"}</span></b><p>{c.body}</p><small>{formatDate(c.created_at)}{c.timestamp_seconds!==null? ` · ${formatTime(c.timestamp_seconds)}`:""}{c.video_id? ` · ${videos.find(v=>v.id===c.video_id)?.title||"Video"}`:""}</small></div><button className="text-link" onClick={()=>onOpenProject(c.project_id)}>Abrir <ArrowRight size={14}/></button></div>)}{comments.length===0&&<div className="table-empty">Todavía no hay comentarios en tus proyectos.</div>}</div></>;
