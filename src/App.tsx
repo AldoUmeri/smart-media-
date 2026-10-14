@@ -5,7 +5,7 @@ import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import { Upload } from "tus-js-client";
 import {
   Activity, ArrowDownRight, ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown,
-  CircleHelp, Clapperboard, Clock3, CloudUpload, Film, FolderKanban, Gauge, LogOut,
+  Bell, CircleHelp, Clapperboard, Clock3, CloudUpload, Film, FolderKanban, Gauge, LogOut,
   Mail, Menu, MessageSquare, Plus, Search, Settings, ShieldCheck, Sparkles, Users, Video,
   X, Play, LockKeyhole, LoaderCircle, ExternalLink, RefreshCw
 } from "lucide-react";
@@ -14,6 +14,7 @@ type Profile = { id: string; full_name: string; phone: string | null; role: "adm
 type Project = { id: string; name: string; description: string | null; status: string; created_at: string; updated_at: string };
 type VideoItem = { id: string; project_id: string; title: string; description: string | null; storage_path: string; version_number: number; mime_type: string; size_bytes: number; review_status: string; created_at: string; uploaded_by: string };
 type CommentItem = { id: string; project_id: string; video_id: string | null; user_id: string; body: string; timestamp_seconds: number | null; parent_comment_id: string | null; created_at: string; profiles?: { full_name: string } };
+type NotificationItem = { id: string; recipient_id: string; project_id: string | null; type: string; payload: Record<string, unknown>; read_at: string | null; created_at: string };
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("es-MX", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
@@ -200,7 +201,7 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   const navigate = useNavigate(); const location = useLocation();
   const isAdmin = profile.role === "admin"; const base = isAdmin ? "/admin" : "/app";
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]); const [videos, setVideos] = useState<VideoItem[]>([]); const [comments, setComments] = useState<CommentItem[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]); const [videos, setVideos] = useState<VideoItem[]>([]); const [comments, setComments] = useState<CommentItem[]>([]); const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [clients, setClients] = useState<Profile[]>([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState(""); const [selectedProject, setSelectedProject] = useState("");
   const [activeVideoId, setActiveVideoId] = useState("");
@@ -221,15 +222,17 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
       const projectQuery = isAdmin
         ? supabase.from("projects").select("*").is("archived_at", null).order("updated_at", { ascending: false })
         : supabase.from("projects").select("*, project_members!inner(user_id)").eq("project_members.user_id", session.user.id).is("archived_at", null).order("updated_at", { ascending: false });
-      const [p, v, c] = await Promise.all([
+      const [p, v, c, n] = await Promise.all([
         projectQuery,
         supabase.from("videos").select("*").order("created_at", { ascending: false }),
         supabase.from("comments").select("id,project_id,video_id,user_id,body,timestamp_seconds,parent_comment_id,created_at,profiles(full_name)").order("created_at", { ascending: false }).limit(500),
+        supabase.from("notifications").select("*").order("created_at", { ascending: false }).limit(100),
       ]);
       if (p.error) throw p.error;
       if (v.error) throw v.error;
       if (c.error) throw c.error;
-      setProjects((p.data ?? []) as Project[]); setVideos((v.data ?? []) as VideoItem[]); setComments((c.data ?? []) as CommentItem[]);
+      if (n.error) throw n.error;
+      setProjects((p.data ?? []) as Project[]); setVideos((v.data ?? []) as VideoItem[]); setComments((c.data ?? []) as CommentItem[]); setNotifications((n.data ?? []) as NotificationItem[]);
       if (isAdmin) {
         const { data: clientData, error: clientError } = await supabase.from("profiles").select("id,full_name,phone,role").eq("role","client").order("full_name");
         if (clientError) throw clientError;
@@ -372,12 +375,12 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   async function seekComment(seconds: number | null) { if (seconds !== null && videoElement) { videoElement.currentTime = seconds; await videoElement.play().catch(()=>undefined); } }
 
   const navItems = isAdmin
-    ? [{to:base,label:"Resumen",icon:<Gauge size={17}/>},{to:`${base}/proyectos`,label:"Proyectos",icon:<FolderKanban size={17}/>},{to:`${base}/clientes`,label:"Clientes",icon:<Users size={17}/>},{to:`${base}/videos`,label:"Videos",icon:<Video size={17}/>},{to:`${base}/comentarios`,label:"Comentarios",icon:<MessageSquare size={17}/>},{to:`${base}/configuracion`,label:"Configuración",icon:<Settings size={17}/>}]
-    : [{to:base,label:"Mi espacio",icon:<Gauge size={17}/>},{to:`${base}/proyectos`,label:"Mis proyectos",icon:<FolderKanban size={17}/>},{to:`${base}/videos`,label:"Videos",icon:<Video size={17}/>},{to:`${base}/comentarios`,label:"Comentarios",icon:<MessageSquare size={17}/>},{to:`${base}/configuracion`,label:"Mi perfil",icon:<Settings size={17}/>}];
+    ? [{to:base,label:"Resumen",icon:<Gauge size={17}/>},{to:base+"/proyectos",label:"Proyectos",icon:<FolderKanban size={17}/>},{to:base+"/clientes",label:"Clientes",icon:<Users size={17}/>},{to:base+"/videos",label:"Videos",icon:<Video size={17}/>},{to:base+"/comentarios",label:"Comentarios",icon:<MessageSquare size={17}/>},{to:base+"/notificaciones",label:"Notificaciones",icon:<Bell size={17}/>},{to:base+"/configuracion",label:"Configuración",icon:<Settings size={17}/>}]
+    : [{to:base,label:"Mi espacio",icon:<Gauge size={17}/>},{to:base+"/proyectos",label:"Mis proyectos",icon:<FolderKanban size={17}/>},{to:base+"/videos",label:"Videos",icon:<Video size={17}/>},{to:base+"/comentarios",label:"Comentarios",icon:<MessageSquare size={17}/>},{to:base+"/notificaciones",label:"Notificaciones",icon:<Bell size={17}/>},{to:base+"/configuracion",label:"Mi perfil",icon:<Settings size={17}/>}];
   const activeNav = navItems.find(item => item.to === location.pathname) ?? navItems.find(item => item.to !== base && location.pathname.startsWith(item.to)) ?? navItems[0];
 
   return <div className="workspace">
-    <aside className={`app-sidebar ${mobileOpen ? "sidebar-open" : ""}`}><Link to={base} className="sidebar-brand"><Brand/></Link><div className="workspace-label">ESPACIO DE TRABAJO</div><nav className="sidebar-nav">{navItems.map(item=><Link key={item.to} to={item.to} onClick={()=>setMobileOpen(false)} className={`sidebar-link ${activeNav.to===item.to?"selected":""}`}>{item.icon}<span>{item.label}</span>{item.label==="Comentarios" && comments.length>0 && <i className="nav-count">{comments.length}</i>}</Link>)}</nav><div className="sidebar-bottom"><div className="privacy-note"><ShieldCheck size={17}/><div><b>Espacio privado</b><small>Acceso protegido por cuenta</small></div></div><button className="sidebar-link logout-link" onClick={onSignOut}><LogOut size={17}/><span>Cerrar sesión</span></button><div className="sidebar-user"><div className="user-avatar">{(profile.full_name || "U").charAt(0).toUpperCase()}</div><div className="user-details"><b>{profile.full_name || "Usuario"}</b><small>{isAdmin ? "Administrador" : "Cliente"}</small></div><ChevronDown size={15}/></div></div></aside>
+    <aside className={`app-sidebar ${mobileOpen ? "sidebar-open" : ""}`}><Link to={base} className="sidebar-brand"><Brand/></Link><div className="workspace-label">ESPACIO DE TRABAJO</div><nav className="sidebar-nav">{navItems.map(item=><Link key={item.to} to={item.to} onClick={()=>setMobileOpen(false)} className={`sidebar-link ${activeNav.to===item.to?"selected":""}`}>{item.icon}<span>{item.label}</span>{item.label==="Comentarios" && comments.length>0 && <i className="nav-count">{comments.length}</i>}{item.label==="Notificaciones" && notifications.filter(n=>!n.read_at).length>0 && <i className="nav-count">{notifications.filter(n=>!n.read_at).length}</i>}</Link>)}</nav><div className="sidebar-bottom"><div className="privacy-note"><ShieldCheck size={17}/><div><b>Espacio privado</b><small>Acceso protegido por cuenta</small></div></div><button className="sidebar-link logout-link" onClick={onSignOut}><LogOut size={17}/><span>Cerrar sesión</span></button><div className="sidebar-user"><div className="user-avatar">{(profile.full_name || "U").charAt(0).toUpperCase()}</div><div className="user-details"><b>{profile.full_name || "Usuario"}</b><small>{isAdmin ? "Administrador" : "Cliente"}</small></div><ChevronDown size={15}/></div></div></aside>
     {mobileOpen && <button className="mobile-overlay" aria-label="Cerrar menú" onClick={()=>setMobileOpen(false)}/>}
     <main className="app-main"><header className="app-topbar"><button className="mobile-menu" aria-label="Abrir menú" onClick={()=>setMobileOpen(true)}><Menu size={20}/></button><div className="breadcrumbs"><span>Smart Media</span><ArrowRight size={13}/><b>{activeNav.label}</b></div><div className="topbar-right"><span className="topbar-date">{new Intl.DateTimeFormat("es-MX",{dateStyle:"medium"}).format(new Date())}</span><button className="icon-button" aria-label="Actualizar datos" onClick={()=>void loadData()}><RefreshCw size={17} className={refreshing?"spin":""}/></button><div className="top-avatar">{(profile.full_name || "U").charAt(0).toUpperCase()}</div></div></header>
       <div className="page-content">
@@ -464,6 +467,20 @@ function LegalPage({ type }: { type:"privacy"|"terms" }) {
   const privacy=type==="privacy";
   return <main className="legal-page"><nav className="public-nav wrap"><Link to="/" className="brand-link"><Brand/></Link><Link to="/" className="text-link"><ArrowLeft size={15}/> Inicio</Link></nav><article className="legal-content"><span className="eyebrow">SMART MEDIA</span><h1>{privacy?"Aviso de privacidad":"Términos de uso"}</h1><div className="inline-message error"><CircleHelp size={17}/>{privacy?"Plantilla inicial: antes de publicar, el responsable debe completar sus datos legales y validar el aviso con asesoría adecuada.":"Plantilla inicial: revisa y adapta estos términos al servicio, responsable y jurisdicción antes del lanzamiento."}</div>{privacy?<><h2>1. Responsable del tratamiento</h2><p>Este espacio debe identificar a la persona o entidad responsable de Mi Marca, sus datos de contacto y el medio para ejercer derechos de privacidad.</p><h2>2. Datos que pueden tratarse</h2><p>Nombre, correo electrónico, teléfono, datos de cuenta, proyectos asignados, archivos audiovisuales, comentarios, aprobaciones y registros técnicos necesarios para proteger el servicio.</p><h2>3. Finalidades</h2><p>Administrar cuentas, asignar proyectos, compartir videos de manera privada, gestionar comentarios y aprobaciones, dar soporte y proteger la plataforma.</p><h2>4. Proveedores y conservación</h2><p>La aplicación puede utilizar Supabase para autenticación, base de datos y almacenamiento. El responsable debe documentar los proveedores, transferencias aplicables, plazos de conservación y mecanismos de eliminación.</p><h2>5. Derechos y contacto</h2><p>Completa aquí el procedimiento y correo de contacto para solicitudes de acceso, rectificación, cancelación, oposición u otros derechos que correspondan conforme a la normativa aplicable.</p></>:<><h2>1. Uso del servicio</h2><p>La plataforma facilita la revisión privada de entregas audiovisuales para usuarios autorizados. Cada usuario es responsable de proteger sus credenciales y usar el servicio de manera lícita.</p><h2>2. Acceso a proyectos</h2><p>Registrarse no garantiza acceso a proyectos. El acceso depende de la asignación y puede revocarse por el administrador autorizado.</p><h2>3. Archivos y derechos</h2><p>Los usuarios solo deben cargar o comentar contenido sobre el que tengan derechos o autorización. La propiedad intelectual del material no se transfiere por el mero uso de la plataforma.</p><h2>4. Disponibilidad y seguridad</h2><p>Se aplican medidas técnicas razonables, pero el responsable debe definir condiciones de soporte, disponibilidad, límites de carga, retención y tratamiento de incidentes.</p><h2>5. Contacto y cambios</h2><p>Añade los datos de contacto del responsable y el procedimiento para informar cambios a estos términos antes de abrir el servicio al público.</p></>}</article><footer className="public-footer wrap"><Brand/><span>Documento pendiente de personalización legal.</span></footer></main>;
 }
+
+function NotificationsPage({ notifications, projects, onRead, onOpenProject }: { notifications:NotificationItem[]; projects:Project[]; onRead:(n:NotificationItem)=>void; onOpenProject:(id:string)=>void }) {
+  const titleFor = (type:string) => ({video_assigned:"Te asignaron un proyecto",new_comment:"Nuevo comentario",comment_reply:"Nueva respuesta",changes_requested:"Cambios solicitados",new_version:"Nueva versión disponible",approved:"Entrega aprobada"} as Record<string,string>)[type] ?? "Actualización del proyecto";
+  const descriptionFor = (n:NotificationItem) => {
+    const payload=n.payload||{};
+    if (n.type==="video_assigned") return "Ya puedes consultar el proyecto " + String(payload.project_name||"asignado") + ".";
+    if (n.type==="new_version") return "Se publicó " + String(payload.title||"un video") + ", versión " + String(payload.version_number||"nueva") + ".";
+    if (n.type==="changes_requested") return "Se solicitaron cambios en " + String(payload.title||"una entrega") + ".";
+    if (n.type==="approved") return String(payload.title||"Una entrega") + " fue aprobada.";
+    return String(payload.body_preview||"Hay nueva actividad en uno de tus proyectos.");
+  };
+  return <><PageHeading eyebrow="CENTRO DE ACTIVIDAD" title="Notificaciones" subtitle="Actualizaciones sobre asignaciones, comentarios y entregas."/><div className="surface activity-list notification-list">{notifications.map(n=><div className={"activity-item notification-item "+(n.read_at?"notification-read":"")} key={n.id}><div className="notification-icon">{n.type==="approved"?<CheckCircle2 size={17}/>:n.type==="changes_requested"?<MessageSquare size={17}/>:n.type==="video_assigned"?<FolderKanban size={17}/>:<Bell size={17}/>}</div><div className="activity-body"><b>{titleFor(n.type)} {!n.read_at&&<span className="unread-dot">Nuevo</span>}</b><p>{descriptionFor(n)}</p><small>{formatDate(n.created_at)}{n.project_id?" · "+(projects.find(p=>p.id===n.project_id)?.name||"Proyecto"):""}</small></div><div className="notification-actions">{n.project_id&&projects.some(p=>p.id===n.project_id)&&<button className="text-link" onClick={()=>onOpenProject(n.project_id!)}>Abrir <ArrowRight size={13}/></button>}{!n.read_at&&<button className="mark-read" onClick={()=>onRead(n)}>Marcar leída</button>}</div></div>)}{notifications.length===0&&<div className="table-empty">No tienes notificaciones. Las novedades aparecerán aquí.</div>}</div></>;
+}
+
 function NotFound() {
   return <div className="not-found"><Brand/><span className="not-found-code">404</span><h1>Esta página no existe.</h1><p>Puede que el enlace haya cambiado o que la dirección sea incorrecta.</p><Link to="/" className="button button-primary">Volver al inicio <ArrowRight size={16}/></Link></div>;
 }
