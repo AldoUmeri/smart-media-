@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "./lib/supabase";
 import {
@@ -210,7 +210,7 @@ function Workspace({ profile, session, onSignOut, onProfile }: { profile: Profil
   const [tab, setTab] = useState<"all"|"in_review"|"changes_requested"|"approved">("all");
   const [profileName, setProfileName] = useState(profile.full_name); const [profilePhone, setProfilePhone] = useState(profile.phone ?? "");
   const [saveBusy, setSaveBusy] = useState(false); const [localMessage, setLocalMessage] = useState(""); const [localError, setLocalError] = useState("");
-  const activeProjectId = useParams().projectId;
+  const activeProjectId = location.pathname.match(/\\/proyectos\\/([^/]+)/)?.[1];
 
   const loadData = useCallback(async () => {
     if (!supabase) return;
