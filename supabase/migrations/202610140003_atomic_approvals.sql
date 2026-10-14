@@ -42,4 +42,5 @@ end;
 $$;
 
 revoke all on function public.approve_video(uuid) from public;
+revoke insert on public.approvals from authenticated;
 grant execute on function public.approve_video(uuid) to authenticated;
